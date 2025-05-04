@@ -7,24 +7,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model users_level {
-  id      String   @id
+model user_level {
+  id     String   @id
   name    String   @unique
-  user    users[]  @relation("UserHasLevel")
+  user    user[]  @relation("UserHasLevel")
 }
 
-model users {
+model user {
   id_user         String       @id @default(uuid())
+  id_level        String
   user_name       String
   user_email      String       @unique
   user_password   String
   profile_picture String?
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
-  id_level        String
+  deleted_at      DateTime?
 
-  level           users_level? @relation("UserHasLevel", fields: [id_level], references: [id])
-  technologies    technology[] @relation("UserTechnology")
+  level           user_level? @relation("UserHasLevel", fields: [id_level], references: [id])
   reviews         review[]  @relation("UserReview")
   favorites       favorite[]  @relation("UserHasFavorite")
 }
@@ -32,46 +32,49 @@ model users {
 model category {
   id_category   String       @id @default(uuid())
   category_name String
+  description   String
 
   technologies  technology[] @relation("TechnologyHasCategory")
 }
 
 model technology {
   id_tech       String       @id @default(uuid())
+  id_category   String
   tech_name     String       @unique
-  description   String
   created_at    DateTime     @default(now())
   updated_at    DateTime     @updatedAt
-  id_user       String
-  id_category   String
+  deleted_at    DateTime?
 
-  user          users        @relation("UserTechnology",fields: [id_user], references: [id_user])
   category      category     @relation("TechnologyHasCategory", fields: [id_category], references: [id_category])
   reviews       review[]     @relation("TechnologyReview")
-  techFavorites tech_favorite[]     @relation("TechnoloyFavorite")
-  comparisonDetails comparison_detail[]     @relation("TechnologyHasDetail")
+  techFavorites tech_favorite[]     @relation("TechnologyFavorite")
+  comparisons   comparison[]     @relation("TechnologyHasComparison")
 }
 
 model review {
   id_review     String     @id @default(uuid())
+  id_tech       String
+  id_user       String
   title_review  String
   content       String
+  rating        Decimal    @db.Decimal(2,1)
   thumbnail     String?
   created_at    DateTime   @default(now())
-  id_user       String
-  id_tech       String
+  updated_at    DateTime     @updatedAt
+  deleted_at    DateTime?
 
-  user          users      @relation("UserReview", fields: [id_user], references: [id_user])
+  user          user      @relation("UserReview", fields: [id_user], references: [id_user])
   technology    technology @relation("TechnologyReview", fields: [id_tech], references: [id_tech])
 }
 
 model favorite {
   id_favorite   String     @id @default(uuid())
+  id_user       String
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt
-  id_user       String
+  deleted_at    DateTime?
 
-  user          users      @relation("UserHasFavorite", fields: [id_user], references: [id_user])
+  user          user      @relation("UserHasFavorite", fields: [id_user], references: [id_user])
   techFavorites tech_favorite[] @relation("FavoriteTechnology")
 }
 
@@ -80,28 +83,20 @@ model tech_favorite {
   id_tech       String
 
   favorite      favorite   @relation("FavoriteTechnology", fields: [id_favorite], references: [id_favorite])
-  technology    technology @relation("TechnoloyFavorite", fields: [id_tech], references: [id_tech])
+  technology    technology @relation("TechnologyFavorite", fields: [id_tech], references: [id_tech])
 
   @@id([id_favorite, id_tech])
 }
 
-model comparison {
-  id_comparison     String               @id @default(uuid())
-  title_comparison  String
-  created_at        DateTime             @default(now())
-  update_at         DateTime             @updatedAt
-
-  details           comparison_detail[]   @relation("ComparisonTechnology")
-}
-
-model comparison_detail {
-  id_comparison       String
-  id_tech             String
-  comparison_table    String
-  comparison_diagram  String
-
-  comparison          comparison @relation("ComparisonTechnology", fields: [id_comparison], references: [id_comparison])
-  technology          technology @relation("TechnologyHasDetail", fields: [id_tech], references: [id_tech])
-
-  @@id([id_comparison, id_tech])
+model comparison{
+  id_detail     String     @id @default(uuid())
+  id_tech       String
+  image_comparison      String
+  key_spec      String    
+  value_spec    String  
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+  deleted_at    DateTime?   
+  
+  technology    technology @relation("TechnologyHasComparison", fields: [id_tech], references: [id_tech])
 }
