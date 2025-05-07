@@ -12,7 +12,14 @@ function authorization(roles = []) {
         token = authHeader.split(" ")[1];
 
         if (token) {
-          user = jwt.verify(token, process.env.JWT_SECRET);
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          user = {
+            id_user: decoded.id_user,
+            role: decoded.role,
+            level: {
+              name: decoded.role
+            }
+          };
         }
       }
       req.user = user;

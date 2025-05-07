@@ -1,5 +1,4 @@
 const { PrismaClient } = require("@prisma/client");
-const bcrypt = require("bcryptjs");
 const uploadToCloudinary = require("../utils/upload-to-cloudinary.js");
 
 const prisma = new PrismaClient();
@@ -16,7 +15,6 @@ async function getUserProfile(req, res) {
         user_name: true,
         user_email: true,
         profile_picture: true,
-        created_at: true,
         level: {
           select: { name: true }
         }
@@ -45,19 +43,40 @@ async function getUserProfile(req, res) {
 async function updateUserProfile(req, res) {
   try {
     const userId = req.user.id_user;
-    const { user_name } = req.body;
+    const { user_name, user_email } = req.body;
 
-    let updateData = { user_name };
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({
+      where: { id_user: userId }
+    });
 
+    if (!existingUser) {
+      throw new Error("User tidak ditemukan");
+    }
+
+    let updateData = {};
+    
+    // Only include fields that are provided in the request
+    if (user_name !== undefined) updateData.user_name = user_name;
+    if (user_email !== undefined) updateData.user_email = user_email;
+
+    let profile_picture = existingUser.profile_picture;
     // Handle profile picture upload if exists
     if (req.file && req.file.buffer) {
-      const imageUrl = await uploadToCloudinary(
+      profile_picture = await uploadToCloudinary(
         req.file.buffer,
         "profile_picture",
         req.file.originalname
       );
-      updateData.profile_picture = imageUrl;
+      updateData.profile_picture = profile_picture;
     }
+
+    // Check if there are any fields to update
+    if (Object.keys(updateData).length === 0) {
+      throw new Error("Tidak ada data yang diupdate");
+    }
+
+    updateData.updated_at = new Date();
 
     const updatedUser = await prisma.user.update({
       where: { id_user: userId },
@@ -67,7 +86,7 @@ async function updateUserProfile(req, res) {
         user_name: true,
         user_email: true,
         profile_picture: true,
-        created_at: true,
+        updated_at: true,
         level: {
           select: { name: true }
         }
@@ -92,7 +111,7 @@ async function updateUserProfile(req, res) {
 async function getAllUsers(req, res) {
   try {
     // Check if user is admin
-    if (req.user.level.name !== "admin") {
+    if (req.user.role !== "admin") {
       throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
     }
 
@@ -103,7 +122,6 @@ async function getAllUsers(req, res) {
         user_name: true,
         user_email: true,
         profile_picture: true,
-        created_at: true,
         level: {
           select: { name: true }
         }
@@ -128,7 +146,7 @@ async function getAllUsers(req, res) {
 async function getUserById(req, res) {
   try {
     // Check if user is admin
-    if (req.user.level.name !== "admin") {
+    if (req.user.role !== "admin") {
       throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
     }
 
@@ -141,7 +159,6 @@ async function getUserById(req, res) {
         user_name: true,
         user_email: true,
         profile_picture: true,
-        created_at: true,
         level: {
           select: { name: true }
         }
@@ -170,28 +187,46 @@ async function getUserById(req, res) {
 async function updateUserById(req, res) {
   try {
     // Check if user is admin
-    if (req.user.level.name !== "admin") {
+    if (req.user.role !== "admin") {
       throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
     }
 
     const { id } = req.params;
     const { user_name, user_email, id_level } = req.body;
 
-    let updateData = { user_name, user_email };
-    
-    if (id_level) {
-      updateData.id_level = id_level;
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({
+      where: { id_user: id }
+    });
+
+    if (!existingUser) {
+      throw new Error("User tidak ditemukan");
     }
 
+    let updateData = {};
+    
+    // Only include fields that are provided in the request
+    if (user_name !== undefined) updateData.user_name = user_name;
+    if (user_email !== undefined) updateData.user_email = user_email;
+    if (id_level !== undefined) updateData.id_level = id_level;
+
+    let profile_picture = existingUser.profile_picture;
     // Handle profile picture upload if exists
     if (req.file && req.file.buffer) {
-      const imageUrl = await uploadToCloudinary(
+      profile_picture = await uploadToCloudinary(
         req.file.buffer,
         "profile_picture",
         req.file.originalname
       );
-      updateData.profile_picture = imageUrl;
+      updateData.profile_picture = profile_picture;
     }
+
+    // Check if there are any fields to update
+    if (Object.keys(updateData).length === 0) {
+      throw new Error("Tidak ada data yang diupdate");
+    }
+
+    updateData.updated_at = new Date();
 
     const updatedUser = await prisma.user.update({
       where: { id_user: id },
@@ -201,7 +236,7 @@ async function updateUserById(req, res) {
         user_name: true,
         user_email: true,
         profile_picture: true,
-        created_at: true,
+        updated_at: true,
         level: {
           select: { name: true }
         }
@@ -226,7 +261,7 @@ async function updateUserById(req, res) {
 async function deleteUserById(req, res) {
   try {
     // Check if user is admin
-    if (req.user.level.name !== "admin") {
+    if (req.user.role !== "admin") {
       throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
     }
 
@@ -240,7 +275,6 @@ async function deleteUserById(req, res) {
         user_name: true,
         user_email: true,
         profile_picture: true,
-        created_at: true,
         deleted_at: true,
         level: {
           select: { name: true }

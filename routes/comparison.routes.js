@@ -14,17 +14,22 @@ const { uploadSingleImage } = require('../middleware/uploadImage');
 
 const router = express.Router();
 
-router.get("/comparison?tech1=id_tech1&tech2=id_tech2", compareTechnologies);
+router.get("/comparison", compareTechnologies);
 
 router.get("/comparisons", authorization(["admin"]), getAllComparisons);
-router.get("/comparison:id", authorization(["admin"]), getComparisonById);
+router.get("/comparison/:id", authorization(["admin"]), getComparisonById);
 router.post(
     "/comparison/new",
     authorization(["admin"]),
     uploadSingleImage("image_comparison"),
     createComparison
   );
-router.put("/comparison/:id", authorization(["admin"]), updateComparison);
+  router.patch(
+    "/comparison/:id",
+    authorization(["admin"]),
+    uploadSingleImage("image_comparison"),
+    updateComparison
+);
 router.delete("/comparion/:id", authorization(["admin"]), deleteComparison);
 
 module.exports = router;

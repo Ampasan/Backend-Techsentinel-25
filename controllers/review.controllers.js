@@ -30,7 +30,7 @@ async function getAllReviews(req, res) {
         user: {
           select: {
             id_user: true,
-            user_name: true
+            user_name: true,
           }
         }
       }
@@ -79,7 +79,7 @@ async function getReviewById(req, res) {
         user: {
           select: {
             id_user: true,
-            user_name: true
+            user_name: true,
           }
         }
       }
@@ -193,31 +193,46 @@ async function updateReview(req, res) {
     const { id } = req.params;
     const { title_review, content, id_tech, id_user, rating } = req.body;
 
-    if (!title_review || !content || !id_tech || !id_user || !rating) {
-      throw new Error("Semua field harus diisi");
+    // Check if review exists
+    const existingReview = await prisma.review.findUnique({
+      where: { id_review: id }
+    });
+
+    if (!existingReview) {
+      throw new Error("Review tidak ditemukan");
     }
 
-    // Validate rating is between 0 and 5
-    if (rating < 0 || rating > 5) {
-      throw new Error("Rating harus antara 0 sampai 5");
+    let updateData = {};
+
+    // Only include fields that are provided in the request
+    if (title_review !== undefined) updateData.title_review = title_review;
+    if (content !== undefined) updateData.content = content;
+    if (id_tech !== undefined) updateData.id_tech = id_tech;
+    if (id_user !== undefined) updateData.id_user = id_user;
+    if (rating !== undefined) {
+      // Validate rating is between 0 and 5
+      if (rating < 0 || rating > 5) {
+        throw new Error("Rating harus antara 0 sampai 5");
+      }
+      updateData.rating = rating;
     }
 
-    let updateData = {
-      title_review,
-      content,
-      id_tech,
-      id_user,
-      rating
-    };
-
+    let thumbnail = existingReview.thumbnail;
     if (req.file && req.file.buffer) {
-      const thumbnail = await uploadToCloudinary(
+      thumbnail = await uploadToCloudinary(
         req.file.buffer,
         "thumbnail",
         req.file.originalname
       );
       updateData.thumbnail = thumbnail;
     }
+
+    // Check if there are any fields to update
+    if (Object.keys(updateData).length === 0) {
+      throw new Error("Tidak ada data yang diupdate");
+    }
+
+    updateData.updated_at = new Date();
 
     const updatedReview = await prisma.review.update({
       where: { id_review: id },
@@ -229,6 +244,7 @@ async function updateReview(req, res) {
         rating: true,
         thumbnail: true,
         created_at: true,
+        updated_at: true,
         technology: {
           select: {
             id_tech: true,

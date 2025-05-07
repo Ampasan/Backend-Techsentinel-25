@@ -190,20 +190,36 @@ async function updateTechnology(req, res) {
     const { id } = req.params;
     const { tech_name, id_category } = req.body;
 
-    if (!tech_name || !id_category) {
-      throw new Error("Semua field harus diisi");
+    // Check if technology exists
+    const existingTechnology = await prisma.technology.findUnique({
+      where: { id_tech: id }
+    });
+
+    if (!existingTechnology) {
+      throw new Error("Teknologi tidak ditemukan");
     }
+
+    let updateData = {};
+    
+    // Only include fields that are provided in the request
+    if (tech_name !== undefined) updateData.tech_name = tech_name;
+    if (id_category !== undefined) updateData.id_category = id_category;
+
+    // Check if there are any fields to update
+    if (Object.keys(updateData).length === 0) {
+      throw new Error("Tidak ada data yang diupdate");
+    }
+
+    updateData.updated_at = new Date();
 
     const updatedTechnology = await prisma.technology.update({
       where: { id_tech: id },
-      data: {
-        tech_name,
-        id_category
-      },
+      data: updateData,
       select: {
         id_tech: true,
         tech_name: true,
         created_at: true,
+        updated_at: true,
         category: {
           select: {
             id_category: true,

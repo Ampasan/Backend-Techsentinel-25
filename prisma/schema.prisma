@@ -32,7 +32,11 @@ model user {
 model category {
   id_category   String       @id @default(uuid())
   category_name String
+  icon_category String?
   description   String
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+  deleted_at    DateTime?
 
   technologies  technology[] @relation("TechnologyHasCategory")
 }

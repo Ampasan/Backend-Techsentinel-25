@@ -12,7 +12,7 @@ const {
 
 const router = express.Router();
 
-router.get("/technology/search?query=", searchTechnologies);
+router.get("/technology/search", searchTechnologies);
 
 router.get("/technologies", authorization(["admin"]), getAllTechnologies);
 router.get("/technology/:id", authorization(["admin"]), getTechnologyById);

@@ -5,11 +5,12 @@ const {
     getAllCategories,
     getCategoryById,
     getAllCategoriesWithTechnologies,
-    getCategoryByIdWithTechnologies,
     createCategory,
     updateCategory,
     deleteCategory,
 } = require("../controllers");
+
+const { uploadSingleImage } = require("../middleware/uploadImage");
 
 const router = express.Router();
 
@@ -17,13 +18,18 @@ router.get("/categories", getAllCategories);
 router.get("/category/:id", getCategoryById);
 
 router.get("/categories/technologies", authorization(["admin"]), getAllCategoriesWithTechnologies);
-router.get("/category/:id/technologies", authorization(["admin"]), getCategoryByIdWithTechnologies);
 router.post(
     "/category/new",
     authorization(["admin"]),
+    uploadSingleImage("icon_category"),
     createCategory
   );
-router.put("/category/:id", authorization(["admin"]), updateCategory);
+  router.patch(
+    "/category/:id",
+    authorization(["admin"]),
+    uploadSingleImage("icon_category"),
+    updateCategory
+);
 router.delete("/category/:id", authorization(["admin"]), deleteCategory);
 
 module.exports = router;

@@ -107,7 +107,7 @@ async function login(req, res) {
     const token = jwt.sign(
       { id_user: user.id_user, role: user.level.name },
       process.env.JWT_SECRET,
-      { expiresIn: "60s" }
+      { expiresIn: "2h" }
     );
 
     // Hapus password sebelum kirim response

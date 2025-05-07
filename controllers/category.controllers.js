@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const uploadToCloudinary = require("../utils/upload-to-cloudinary.js");
 
 const prisma = new PrismaClient();
 
@@ -6,9 +7,13 @@ const prisma = new PrismaClient();
 async function getAllCategories(req, res) {
   try {
     const categories = await prisma.category.findMany({
+      where: {
+        deleted_at: null
+      },
       select: {
         id_category: true,
         category_name: true,
+        icon_category: true,
         description: true
       }
     });
@@ -32,11 +37,15 @@ async function getCategoryById(req, res) {
   try {
     const { id } = req.params;
 
-    const category = await prisma.category.findUnique({
-      where: { id_category: id },
+    const category = await prisma.category.findFirst({
+      where: { 
+        id_category: id,
+        deleted_at: null
+      },
       select: {
         id_category: true,
         category_name: true,
+        icon_category: true,
         description: true
       }
     });
@@ -71,13 +80,13 @@ async function getAllCategoriesWithTechnologies(req, res) {
       select: {
         id_category: true,
         category_name: true,
+        icon_category: true,
         description: true,
         technologies: {
           where: { deleted_at: null },
           select: {
             id_tech: true,
-            tech_name: true,
-            created_at: true
+            tech_name: true
           }
         }
       }
@@ -97,51 +106,6 @@ async function getAllCategoriesWithTechnologies(req, res) {
   }
 }
 
-// Get category by ID with technologies (admin only)
-async function getCategoryByIdWithTechnologies(req, res) {
-  try {
-    // Check if user is admin
-    if (req.user.level.name !== "admin") {
-      throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
-    }
-
-    const { id } = req.params;
-
-    const category = await prisma.category.findUnique({
-      where: { id_category: id },
-      select: {
-        id_category: true,
-        category_name: true,
-        description: true,
-        technologies: {
-          where: { deleted_at: null },
-          select: {
-            id_tech: true,
-            tech_name: true,
-            created_at: true
-          }
-        }
-      }
-    });
-
-    if (!category) {
-      throw new Error("Kategori tidak ditemukan");
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Kategori berhasil diambil",
-      data: category
-    });
-  } catch (error) {
-    console.error("getCategoryByIdWithTechnologies error:", error);
-    res.status(400).json({
-      success: false,
-      message: error.message || "Gagal mengambil data kategori"
-    });
-  }
-}
-
 // Create new category (admin only)
 async function createCategory(req, res) {
   try {
@@ -156,15 +120,27 @@ async function createCategory(req, res) {
       throw new Error("Semua field harus diisi");
     }
 
+    let icon_category = null;
+    if (req.file && req.file.buffer) {
+      icon_category = await uploadToCloudinary(
+        req.file.buffer,
+        "icon_category",
+        req.file.originalname
+      );
+    }
+
     const newCategory = await prisma.category.create({
       data: {
         category_name,
+        icon_category,
         description
       },
       select: {
         id_category: true,
         category_name: true,
-        description: true
+        icon_category: true,
+        description: true,
+        created_at: true
       }
     });
 
@@ -193,20 +169,47 @@ async function updateCategory(req, res) {
     const { id } = req.params;
     const { category_name, description } = req.body;
 
-    if (!category_name || !description) {
-      throw new Error("Semua field harus diisi");
+    // Check if category exists
+    const existingCategory = await prisma.category.findUnique({
+      where: { id_category: id }
+    });
+
+    if (!existingCategory) {
+      throw new Error("Kategori tidak ditemukan");
     }
+
+    let updateData = {};
+    
+    // Only include fields that are provided in the request
+    if (category_name !== undefined) updateData.category_name = category_name;
+    if (description !== undefined) updateData.description = description;
+
+    let icon_category = existingCategory.icon_category;
+    if (req.file && req.file.buffer) {
+      icon_category = await uploadToCloudinary(
+        req.file.buffer,
+        "icon_category",
+        req.file.originalname
+      );
+      updateData.icon_category = icon_category;
+    }
+
+    // Check if there are any fields to update
+    if (Object.keys(updateData).length === 0) {
+      throw new Error("Tidak ada data yang diupdate");
+    }
+
+    updateData.updated_at = new Date();
 
     const updatedCategory = await prisma.category.update({
       where: { id_category: id },
-      data: {
-        category_name,
-        description
-      },
+      data: updateData,
       select: {
         id_category: true,
         category_name: true,
-        description: true
+        icon_category: true,
+        description: true,
+        updated_at: true
       }
     });
 
@@ -229,19 +232,31 @@ async function deleteCategory(req, res) {
   try {
     // Check if user is admin
     if (req.user.level.name !== "admin") {
-      throw new Error("Unauthorized: Only admin can access this endpoint");
+      throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
     }
 
     const { id } = req.params;
 
-    // Since there"s no deleted_at field in the category model,
-    // we"ll perform a hard delete
-    const deletedCategory = await prisma.category.delete({
+    // Check if category exists
+    const existingCategory = await prisma.category.findUnique({
+      where: { id_category: id }
+    });
+
+    if (!existingCategory) {
+      throw new Error("Kategori tidak ditemukan");
+    }
+
+    // Soft delete the category
+    const deletedCategory = await prisma.category.update({
       where: { id_category: id },
+      data: {
+        deleted_at: new Date()
+      },
       select: {
         id_category: true,
         category_name: true,
-        description: true
+        description: true,
+        deleted_at: true
       }
     });
 
@@ -263,7 +278,6 @@ module.exports = {
   getAllCategories,
   getCategoryById,
   getAllCategoriesWithTechnologies,
-  getCategoryByIdWithTechnologies,
   createCategory,
   updateCategory,
   deleteCategory

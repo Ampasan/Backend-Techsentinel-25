@@ -23,7 +23,12 @@ router.post(
     createReview
   );
 
-router.put("/review/:id", authorization(["admin"]), updateReview);
+router.patch(
+  "/review/:id", 
+  authorization(["admin"]),
+  uploadSingleImage("thumbnail"),
+  updateReview
+);
 router.delete("/review/:id", authorization(["admin"]), deleteReview);
 
 module.exports = router;
