@@ -1,5 +1,4 @@
 const { PrismaClient } = require("@prisma/client");
-const uploadToCloudinary = require("../utils/upload-to-cloudinary.js");
 
 const prisma = new PrismaClient();
 
@@ -22,18 +21,14 @@ async function compareTechnologies(req, res) {
       select: {
         id_tech: true,
         tech_name: true,
+        brand: true,
+        specs: true,
+        tech_image: true,
+        rating: true,
         category: {
           select: {
             id_category: true,
             category_name: true
-          }
-        },
-        comparisons: {
-          where: { deleted_at: null },
-          select: {
-            key_spec: true,
-            value_spec: true,
-            image_comparison: true
           }
         }
       }
@@ -48,42 +43,40 @@ async function compareTechnologies(req, res) {
     const tech1Data = technologies.find(t => t.id_tech === tech1);
     const tech2Data = technologies.find(t => t.id_tech === tech2);
 
-    // Get image comparison URLs (take the first non-null image for each tech)
-    const tech1Image = tech1Data.comparisons.find(c => c.image_comparison)?.image_comparison || null;
-    const tech2Image = tech2Data.comparisons.find(c => c.image_comparison)?.image_comparison || null;
-
-    // Get all unique key_specs from both technologies
-    const allKeySpecs = new Set([
-      ...tech1Data.comparisons.map(c => c.key_spec),
-      ...tech2Data.comparisons.map(c => c.key_spec)
+    // Get all unique keys from both technologies' specs
+    const allKeys = new Set([
+      ...Object.keys(tech1Data.specs),
+      ...Object.keys(tech2Data.specs)
     ]);
 
-    // Create comparison entries for each key_spec
-    for (const keySpec of allKeySpecs) {
-      const tech1Comparison = tech1Data.comparisons.find(c => c.key_spec === keySpec);
-      const tech2Comparison = tech2Data.comparisons.find(c => c.key_spec === keySpec);
-
+    // Create comparison entries for each spec
+    for (const key of allKeys) {
       comparison.push({
-        key_spec: keySpec,
-        tech1_value: tech1Comparison?.value_spec || "-",
-        tech2_value: tech2Comparison?.value_spec || "-"
+        key_spec: key,
+        tech1_value: tech1Data.specs[key] || "-",
+        tech2_value: tech2Data.specs[key] || "-"
       });
     }
 
-    // Remove comparisons from the response as they're now in the comparison array
-    delete tech1Data.comparisons;
-    delete tech2Data.comparisons;
-
     res.status(200).json({
+      success: true,
       message: "Sukses membandingkan teknologi",
       data: {
         tech1: {
-          ...tech1Data,
-          image_comparison: tech1Image
+          id_tech: tech1Data.id_tech,
+          tech_name: tech1Data.tech_name,
+          brand: tech1Data.brand,
+          tech_image: tech1Data.tech_image,
+          rating: tech1Data.rating,
+          category: tech1Data.category
         },
         tech2: {
-          ...tech2Data,
-          image_comparison: tech2Image
+          id_tech: tech2Data.id_tech,
+          tech_name: tech2Data.tech_name,
+          brand: tech2Data.brand,
+          tech_image: tech2Data.tech_image,
+          rating: tech2Data.rating,
+          category: tech2Data.category
         },
         comparison
       }
@@ -97,21 +90,16 @@ async function compareTechnologies(req, res) {
   }
 }
 
-// Get all comparisons (admin only)
+// Get all comparisons (public)
 async function getAllComparisons(req, res) {
   try {
-    // Check if user is admin
-    if (req.user.level.name !== "admin") {
-      throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
-    }
-
     const comparisons = await prisma.comparison.findMany({
       where: { deleted_at: null },
       select: {
         id_detail: true,
-        key_spec: true,
-        value_spec: true,
-        image_comparison: true,
+        id_tech: true,
+        compared_with: true,
+        created_at: true,
         technology: {
           select: {
             id_tech: true,
@@ -123,14 +111,32 @@ async function getAllComparisons(req, res) {
               }
             }
           }
-        }
+        },
       }
     });
+
+    // Fetch compared technology details for each comparison
+    const comparisonsWithBothTech = await Promise.all(comparisons.map(async (comp) => {
+      const comparedTechnology = await prisma.technology.findUnique({
+        where: { id_tech: comp.compared_with, deleted_at: null },
+        select: {
+          id_tech: true,
+          tech_name: true,
+          category: {
+            select: {
+              id_category: true,
+              category_name: true
+            }
+          }
+        }
+      });
+      return { ...comp, compared_technology: comparedTechnology };
+    }));
 
     res.status(200).json({
       success: true,
       message: "Daftar perbandingan berhasil diambil",
-      data: comparisons
+      data: comparisonsWithBothTech
     });
   } catch (error) {
     console.error("getAllComparisons error:", error);
@@ -141,23 +147,18 @@ async function getAllComparisons(req, res) {
   }
 }
 
-// Get comparison by ID (admin only)
+// Get comparison by ID (public)
 async function getComparisonById(req, res) {
   try {
-    // Check if user is admin
-    if (req.user.level.name !== "admin") {
-      throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
-    }
-
     const { id } = req.params;
 
     const comparison = await prisma.comparison.findUnique({
-      where: { id_detail: id },
+      where: { id_detail: id, deleted_at: null },
       select: {
         id_detail: true,
-        key_spec: true,
-        value_spec: true,
-        image_comparison: true,
+        id_tech: true,
+        compared_with: true,
+        created_at: true,
         technology: {
           select: {
             id_tech: true,
@@ -169,7 +170,7 @@ async function getComparisonById(req, res) {
               }
             }
           }
-        }
+        },
       }
     });
 
@@ -177,10 +178,25 @@ async function getComparisonById(req, res) {
       throw new Error("Perbandingan tidak ditemukan");
     }
 
+    // Fetch compared technology details
+    const comparedTechnology = await prisma.technology.findUnique({
+      where: { id_tech: comparison.compared_with, deleted_at: null },
+      select: {
+        id_tech: true,
+        tech_name: true,
+        category: {
+          select: {
+            id_category: true,
+            category_name: true
+          }
+        }
+      }
+    });
+
     res.status(200).json({
       success: true,
       message: "Perbandingan berhasil diambil",
-      data: comparison
+      data: { ...comparison, compared_technology: comparedTechnology }
     });
   } catch (error) {
     console.error("getComparisonById error:", error);
@@ -199,71 +215,70 @@ async function createComparison(req, res) {
       throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
     }
 
-    let { id_tech, key_spec, value_spec } = req.body;
+    const { id_tech, compared_with } = req.body;
 
-    // Pastikan semua field ada
-    if (!id_tech || !key_spec || !value_spec) {
-      throw new Error("Semua field harus diisi");
+    if (!id_tech || !compared_with) {
+      throw new Error("ID kedua teknologi harus diisi");
     }
 
-    // Jika hanya satu, jadikan array
-    if (!Array.isArray(key_spec)) key_spec = [key_spec];
-    if (!Array.isArray(value_spec)) value_spec = [value_spec];
-
-    if (key_spec.length !== value_spec.length) {
-      throw new Error("Jumlah key_spec dan value_spec harus sama");
-    }
-
-    // Untuk upload gambar, jika ingin support multiple images, perlu modifikasi upload middleware juga.
-    // Untuk sekarang, kita asumsikan satu gambar untuk semua comparison, atau bisa dikembangkan lebih lanjut.
-
-    let image_comparison = null;
-    if (req.file && req.file.buffer) {
-      image_comparison = await uploadToCloudinary(
-        req.file.buffer,
-        "image_comparison",
-        req.file.originalname
-      );
-    }
-
-    // Loop dan create comparison untuk setiap pasangan key-value
-    const createdComparisons = [];
-    for (let i = 0; i < key_spec.length; i++) {
-      const newComparison = await prisma.comparison.create({
-        data: {
-          id_tech,
-          key_spec: key_spec[i],
-          value_spec: value_spec[i],
-          image_comparison
+    // Check if both technologies exist
+    const technologies = await prisma.technology.findMany({
+      where: {
+        id_tech: {
+          in: [id_tech, compared_with]
         },
-        select: {
-          id_detail: true,
-          key_spec: true,
-          value_spec: true,
-          image_comparison: true,
-          created_at: true,
-          technology: {
-            select: {
-              id_tech: true,
-              tech_name: true,
-              category: {
-                select: {
-                  id_category: true,
-                  category_name: true,
-                  description: true
-                }
+        deleted_at: null
+      }
+    });
+
+    if (technologies.length !== 2) {
+      throw new Error("Satu atau kedua teknologi tidak ditemukan");
+    }
+
+    const newComparison = await prisma.comparison.create({
+      data: {
+        id_tech,
+        compared_with
+      },
+      select: {
+        id_detail: true,
+        id_tech: true,
+        compared_with: true,
+        created_at: true,
+        technology: {
+          select: {
+            id_tech: true,
+            tech_name: true,
+            category: {
+              select: {
+                id_category: true,
+                category_name: true
               }
             }
           }
         }
-      });
-      createdComparisons.push(newComparison);
-    }
+      }
+    });
+
+    // Fetch compared technology details for the newly created comparison
+    const comparedTechnology = await prisma.technology.findUnique({
+      where: { id_tech: newComparison.compared_with, deleted_at: null },
+      select: {
+        id_tech: true,
+        tech_name: true,
+        category: {
+          select: {
+            id_category: true,
+            category_name: true
+          }
+        }
+      }
+    });
 
     res.status(201).json({
       success: true,
       message: "Perbandingan berhasil dibuat",
-      data: createdComparisons
+      data: { ...newComparison, compared_technology: comparedTechnology }
     });
   } catch (error) {
     console.error("createComparison error:", error);
@@ -283,12 +298,7 @@ async function updateComparison(req, res) {
     }
 
     const { id } = req.params;
-    let { id_tech, key_spec, value_spec } = req.body;
-
-    // Jika field berupa array (karena form-data), ambil elemen pertamanya
-    if (Array.isArray(id_tech)) id_tech = id_tech[0];
-    if (Array.isArray(key_spec)) key_spec = key_spec[0];
-    if (Array.isArray(value_spec)) value_spec = value_spec[0];
+    const { id_tech, compared_with } = req.body;
 
     // Check if comparison exists
     const existingComparison = await prisma.comparison.findUnique({
@@ -299,22 +309,28 @@ async function updateComparison(req, res) {
       throw new Error("Perbandingan tidak ditemukan");
     }
 
-    let updateData = {};
+    // Check if both technologies exist
+    if (id_tech || compared_with) {
+      const techIds = [id_tech || existingComparison.id_tech, compared_with || existingComparison.compared_with];
+      const technologies = await prisma.technology.findMany({
+        where: {
+          id_tech: {
+            in: techIds
+          },
+          deleted_at: null
+        }
+      });
 
+      if (technologies.length !== 2) {
+        throw new Error("Satu atau kedua teknologi tidak ditemukan");
+      }
+    }
+
+    let updateData = {};
+    
     // Only include fields that are provided in the request
     if (id_tech !== undefined) updateData.id_tech = id_tech;
-    if (key_spec !== undefined) updateData.key_spec = key_spec;
-    if (value_spec !== undefined) updateData.value_spec = value_spec;
-
-    let image_comparison = existingComparison.image_comparison;
-    if (req.file && req.file.buffer) {
-      image_comparison = await uploadToCloudinary(
-        req.file.buffer,
-        "image_comparison",
-        req.file.originalname
-      );
-      updateData.image_comparison = image_comparison;
-    }
+    if (compared_with !== undefined) updateData.compared_with = compared_with;
 
     // Check if there are any fields to update
     if (Object.keys(updateData).length === 0) {
@@ -328,9 +344,8 @@ async function updateComparison(req, res) {
       data: updateData,
       select: {
         id_detail: true,
-        key_spec: true,
-        value_spec: true,
-        image_comparison: true,
+        id_tech: true,
+        compared_with: true,
         updated_at: true,
         technology: {
           select: {
@@ -347,10 +362,25 @@ async function updateComparison(req, res) {
       }
     });
 
+    // Fetch compared technology details for the updated comparison
+    const comparedTechnology = await prisma.technology.findUnique({
+      where: { id_tech: updatedComparison.compared_with, deleted_at: null },
+      select: {
+        id_tech: true,
+        tech_name: true,
+        category: {
+          select: {
+            id_category: true,
+            category_name: true
+          }
+        }
+      }
+    });
+
     res.status(200).json({
       success: true,
       message: "Perbandingan berhasil diupdate",
-      data: updatedComparison
+      data: { ...updatedComparison, compared_technology: comparedTechnology }
     });
   } catch (error) {
     console.error("updateComparison error:", error);
@@ -376,9 +406,8 @@ async function deleteComparison(req, res) {
       data: { deleted_at: new Date() },
       select: {
         id_detail: true,
-        key_spec: true,
-        value_spec: true,
-        image_comparison: true,
+        id_tech: true,
+        compared_with: true,
         deleted_at: true,
         technology: {
           select: {
@@ -395,10 +424,25 @@ async function deleteComparison(req, res) {
       }
     });
 
+    // Fetch compared technology details for the deleted comparison
+    const comparedTechnology = await prisma.technology.findUnique({
+      where: { id_tech: deletedComparison.compared_with, deleted_at: null },
+      select: {
+        id_tech: true,
+        tech_name: true,
+        category: {
+          select: {
+            id_category: true,
+            category_name: true
+          }
+        }
+      }
+    });
+
     res.status(200).json({
       success: true,
       message: "Perbandingan berhasil dihapus",
-      data: deletedComparison
+      data: { ...deletedComparison, compared_technology: comparedTechnology }
     });
   } catch (error) {
     console.error("deleteComparison error:", error);

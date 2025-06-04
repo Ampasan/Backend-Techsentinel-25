@@ -25,15 +25,15 @@ model user {
   deleted_at      DateTime?
 
   level           user_level? @relation("UserHasLevel", fields: [id_level], references: [id])
-  reviews         review[]  @relation("UserReview")
+  articles         article[]  @relation("UserArticle")
   favorites       favorite[]  @relation("UserHasFavorite")
+  reviews         review[]    @relation("UserReviews")
 }
 
 model category {
   id_category   String       @id @default(uuid())
   category_name String
-  icon_category String?
-  description   String
+  icon_category String
   created_at    DateTime     @default(now())
   updated_at    DateTime     @updatedAt
   deleted_at    DateTime?
@@ -43,32 +43,48 @@ model category {
 
 model technology {
   id_tech       String       @id @default(uuid())
-  id_category   String
   tech_name     String       @unique
+  id_category   String
+  brand         String
+  rating        Decimal    @db.Decimal(2,1)
+  tech_image    String?
+  review        String
+  description_tech  String
+  id_user       String
   created_at    DateTime     @default(now())
   updated_at    DateTime     @updatedAt
   deleted_at    DateTime?
 
+  specs         spec[]      @relation("TechnologySpecs") 
+  reviews       review[]     @relation("TechnologyReviews")
   category      category     @relation("TechnologyHasCategory", fields: [id_category], references: [id_category])
-  reviews       review[]     @relation("TechnologyReview")
+  articles       article[]     @relation("TechnologyArticle")
   techFavorites tech_favorite[]     @relation("TechnologyFavorite")
   comparisons   comparison[]     @relation("TechnologyHasComparison")
 }
 
-model review {
-  id_review     String     @id @default(uuid())
+model article {
+  id_article     String     @id @default(uuid())
   id_tech       String
   id_user       String
-  title_review  String
-  content       String
-  rating        Decimal    @db.Decimal(2,1)
-  thumbnail     String?
+  title_article  String
+  article_image   String?
+  excerpt         String
+  intro         String
+  subTitle      String?
+  subImage      String?
+  subContent    String?
+  subTitle2     String?
+  subContent2     String?
+  section2Title   String?
+  section2Image   String?
+  section2Content   String?
   created_at    DateTime   @default(now())
-  updated_at    DateTime     @updatedAt
+  updated_at    DateTime   @updatedAt
   deleted_at    DateTime?
 
-  user          user      @relation("UserReview", fields: [id_user], references: [id_user])
-  technology    technology @relation("TechnologyReview", fields: [id_tech], references: [id_tech])
+  user          user      @relation("UserArticle", fields: [id_user], references: [id_user])
+  technology    technology @relation("TechnologyArticle", fields: [id_tech], references: [id_tech])
 }
 
 model favorite {
@@ -92,15 +108,47 @@ model tech_favorite {
   @@id([id_favorite, id_tech])
 }
 
-model comparison{
+model comparison {
   id_detail     String     @id @default(uuid())
   id_tech       String
-  image_comparison      String
-  key_spec      String    
-  value_spec    String  
+  compared_with String    
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt
   deleted_at    DateTime?   
   
   technology    technology @relation("TechnologyHasComparison", fields: [id_tech], references: [id_tech])
+}
+
+model review {
+  id_review     String     @id @default(uuid())
+  id_user       String
+  id_tech       String
+  rating        Decimal    @db.Decimal(2,1)
+  comment       String
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+  deleted_at    DateTime?
+
+  user          user      @relation("UserReviews", fields: [id_user], references: [id_user])
+  technology    technology @relation("TechnologyReviews", fields: [id_tech], references: [id_tech])
+}
+
+model spec {
+  id_spec         String   @id @default(uuid())
+  id_tech         String
+  ram             String
+  storage         String
+  baterai         String
+  camera          String
+  prosesor        String
+  sistem_operasi  String
+  ukuran_layar    String
+  resolusi_layar  String
+  refresh_rate    String
+  price           Int
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  deleted_at      DateTime?
+
+  technology      technology @relation("TechnologySpecs", fields: [id_tech], references: [id_tech])
 }

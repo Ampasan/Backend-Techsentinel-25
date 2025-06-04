@@ -56,7 +56,7 @@ async function addToFavorites(req, res) {
       }
     });
 
-    // Get updated favorite list
+    // Get updated favorite list with more technology details
     const updatedFavorite = await prisma.favorite.findUnique({
       where: { id_favorite: favorite.id_favorite },
       select: {
@@ -68,11 +68,16 @@ async function addToFavorites(req, res) {
               select: {
                 id_tech: true,
                 tech_name: true,
+                brand: true,
+                rating: true,
+                tech_image: true,
+                review: true,
+                description_tech: true,
                 category: {
                   select: {
                     id_category: true,
                     category_name: true,
-                    description: true
+                    icon_category: true
                   }
                 }
               }
@@ -96,7 +101,7 @@ async function addToFavorites(req, res) {
   }
 }
 
-// Get user"s favorites
+// Get user's favorites
 async function getFavorites(req, res) {
   try {
     const userId = req.user.id_user;
@@ -108,18 +113,22 @@ async function getFavorites(req, res) {
       },
       select: {
         id_favorite: true,
-        created_at: true,
         techFavorites: {
           select: {
             technology: {
               select: {
                 id_tech: true,
                 tech_name: true,
+                brand: true,
+                rating: true,
+                tech_image: true,
+                review: true,
+                description_tech: true,
                 category: {
                   select: {
                     id_category: true,
                     category_name: true,
-                    description: true
+                    icon_category: true
                   }
                 }
               }
@@ -157,7 +166,7 @@ async function removeFromFavorites(req, res) {
     const { id_tech } = req.params;
     const userId = req.user.id_user;
 
-    // Find user"s favorite list
+    // Find user's favorite list
     const favorite = await prisma.favorite.findFirst({
       where: {
         id_user: userId,

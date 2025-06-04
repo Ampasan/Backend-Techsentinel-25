@@ -1,36 +1,22 @@
 const { PrismaClient } = require("@prisma/client");
-const uploadToCloudinary = require("../utils/upload-to-cloudinary.js");
-
 const prisma = new PrismaClient();
 
-// Get all reviews (for regular users and admin)
+// Get all reviews
 async function getAllReviews(req, res) {
   try {
     const reviews = await prisma.review.findMany({
       where: { deleted_at: null },
-      select: {
-        id_review: true,
-        title_review: true,
-        content: true,
-        rating: true,
-        thumbnail: true,
-        created_at: true,
-        technology: {
-          select: {
-            id_tech: true,
-            tech_name: true,
-            category: {
-              select: {
-                id_category: true,
-                category_name: true
-              }
-            }
-          }
-        },
+      include: {
         user: {
           select: {
-            id_user: true,
             user_name: true,
+            profile_picture: true
+          }
+        },
+        technology: {
+          select: {
+            tech_name: true,
+            brand: true
           }
         }
       }
@@ -50,36 +36,24 @@ async function getAllReviews(req, res) {
   }
 }
 
-// Get review by ID (for regular users and admin)
+// Get review by ID
 async function getReviewById(req, res) {
   try {
     const { id } = req.params;
 
     const review = await prisma.review.findUnique({
       where: { id_review: id },
-      select: {
-        id_review: true,
-        title_review: true,
-        content: true,
-        rating: true,
-        thumbnail: true,
-        created_at: true,
-        technology: {
-          select: {
-            id_tech: true,
-            tech_name: true,
-            category: {
-              select: {
-                id_category: true,
-                category_name: true
-              }
-            }
-          }
-        },
+      include: {
         user: {
           select: {
-            id_user: true,
             user_name: true,
+            profile_picture: true
+          }
+        },
+        technology: {
+          select: {
+            tech_name: true,
+            brand: true
           }
         }
       }
@@ -103,167 +77,115 @@ async function getReviewById(req, res) {
   }
 }
 
-// Create new review (admin only)
+// Create new review
 async function createReview(req, res) {
   try {
-    // Check if user is admin
-    if (req.user.level.name !== "admin") {
-      throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
-    }
+    const { id_tech, rating, comment } = req.body;
+    const id_user = req.user.id_user; // Get id_user from authenticated user
 
-    const { title_review, content, id_tech, id_user, rating } = req.body;
-
-    if (!title_review || !content || !id_tech || !id_user || !rating) {
+    // Validate required fields
+    if (!id_tech || !rating || !comment) {
       throw new Error("Semua field harus diisi");
     }
 
-    // Validate rating is between 0 and 5
-    if (rating < 0 || rating > 5) {
-      throw new Error("Rating harus antara 0 sampai 5");
+    // Validate rating range (1-5)
+    if (rating < 1 || rating > 5) {
+      throw new Error("Rating harus antara 1-5");
     }
 
-    let thumbnail = null;
-    if (req.file && req.file.buffer) {
-      thumbnail = await uploadToCloudinary(
-        req.file.buffer,
-        "thumbnail",
-        req.file.originalname
-      );
-    }
-
-    const newReview = await prisma.review.create({
+    const review = await prisma.review.create({
       data: {
-        title_review,
-        content,
-        id_tech,
         id_user,
-        rating,
-        thumbnail
+        id_tech,
+        rating: parseFloat(rating),
+        comment
       },
-      select: {
-        id_review: true,
-        title_review: true,
-        content: true,
-        rating: true,
-        thumbnail: true,
-        created_at: true,
-        technology: {
-          select: {
-            id_tech: true,
-            tech_name: true,
-            category: {
-              select: {
-                id_category: true,
-                category_name: true
-              }
-            }
-          }
-        },
+      include: {
         user: {
           select: {
-            id_user: true,
-            user_name: true
+            user_name: true,
+            profile_picture: true
+          }
+        },
+        technology: {
+          select: {
+            tech_name: true,
+            brand: true
           }
         }
       }
+    });
+
+    // Update technology average rating
+    const techReviews = await prisma.review.findMany({
+      where: { id_tech, deleted_at: null }
+    });
+
+    const avgRating = techReviews.reduce((acc, curr) => acc + parseFloat(curr.rating), 0) / techReviews.length;
+
+    await prisma.technology.update({
+      where: { id_tech },
+      data: { rating: avgRating }
     });
 
     res.status(201).json({
       success: true,
       message: "Review berhasil dibuat",
-      data: newReview
+      data: review
     });
   } catch (error) {
     console.error("createReview error:", error);
     res.status(400).json({
       success: false,
-      message: error.message || "Gagal membuat review baru"
+      message: error.message || "Gagal membuat review"
     });
   }
 }
 
-// Update review (admin only)
+// Update review
 async function updateReview(req, res) {
   try {
-    // Check if user is admin
-    if (req.user.level.name !== "admin") {
-      throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
-    }
-
     const { id } = req.params;
-    const { title_review, content, id_tech, id_user, rating } = req.body;
+    const { rating, comment } = req.body;
 
-    // Check if review exists
-    const existingReview = await prisma.review.findUnique({
-      where: { id_review: id }
-    });
-
-    if (!existingReview) {
-      throw new Error("Review tidak ditemukan");
-    }
-
-    let updateData = {};
-
-    // Only include fields that are provided in the request
-    if (title_review !== undefined) updateData.title_review = title_review;
-    if (content !== undefined) updateData.content = content;
-    if (id_tech !== undefined) updateData.id_tech = id_tech;
-    if (id_user !== undefined) updateData.id_user = id_user;
-    if (rating !== undefined) {
-      // Validate rating is between 0 and 5
-      if (rating < 0 || rating > 5) {
-        throw new Error("Rating harus antara 0 sampai 5");
+    const updateData = {};
+    if (rating) {
+      if (rating < 1 || rating > 5) {
+        throw new Error("Rating harus antara 1-5");
       }
-      updateData.rating = rating;
+      updateData.rating = parseFloat(rating);
     }
-
-    let thumbnail = existingReview.thumbnail;
-    if (req.file && req.file.buffer) {
-      thumbnail = await uploadToCloudinary(
-        req.file.buffer,
-        "thumbnail",
-        req.file.originalname
-      );
-      updateData.thumbnail = thumbnail;
-    }
-
-    // Check if there are any fields to update
-    if (Object.keys(updateData).length === 0) {
-      throw new Error("Tidak ada data yang diupdate");
-    }
-
-    updateData.updated_at = new Date();
+    if (comment) updateData.comment = comment;
 
     const updatedReview = await prisma.review.update({
       where: { id_review: id },
       data: updateData,
-      select: {
-        id_review: true,
-        title_review: true,
-        content: true,
-        rating: true,
-        thumbnail: true,
-        created_at: true,
-        updated_at: true,
-        technology: {
-          select: {
-            id_tech: true,
-            tech_name: true,
-            category: {
-              select: {
-                id_category: true,
-                category_name: true
-              }
-            }
-          }
-        },
+      include: {
         user: {
           select: {
-            id_user: true,
-            user_name: true
+            user_name: true,
+            profile_picture: true
+          }
+        },
+        technology: {
+          select: {
+            tech_name: true,
+            brand: true
           }
         }
       }
+    });
+
+    // Update technology average rating
+    const techReviews = await prisma.review.findMany({
+      where: { id_tech: updatedReview.id_tech, deleted_at: null }
+    });
+
+    const avgRating = techReviews.reduce((acc, curr) => acc + parseFloat(curr.rating), 0) / techReviews.length;
+
+    await prisma.technology.update({
+      where: { id_tech: updatedReview.id_tech },
+      data: { rating: avgRating }
     });
 
     res.status(200).json({
@@ -280,51 +202,42 @@ async function updateReview(req, res) {
   }
 }
 
-// Delete review (admin only) - soft delete
+// Delete review (soft delete)
 async function deleteReview(req, res) {
   try {
-    // Check if user is admin
-    if (req.user.level.name !== "admin") {
-      throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
-    }
-
     const { id } = req.params;
 
-    const deletedReview = await prisma.review.update({
-      where: { id_review: id },
-      data: { deleted_at: new Date() },
-      select: {
-        id_review: true,
-        title_review: true,
-        content: true,
-        thumbnail: true,
-        created_at: true,
-        deleted_at: true,
-        technology: {
-          select: {
-            id_tech: true,
-            tech_name: true,
-            category: {
-              select: {
-                id_category: true,
-                category_name: true
-              }
-            }
-          }
-        },
-        user: {
-          select: {
-            id_user: true,
-            user_name: true
-          }
-        }
-      }
+    const review = await prisma.review.findUnique({
+      where: { id_review: id }
     });
+
+    await prisma.review.update({
+      where: { id_review: id },
+      data: { deleted_at: new Date() }
+    });
+
+    // Update technology average rating
+    const techReviews = await prisma.review.findMany({
+      where: { id_tech: review.id_tech, deleted_at: null }
+    });
+
+    if (techReviews.length > 0) {
+      const avgRating = techReviews.reduce((acc, curr) => acc + parseFloat(curr.rating), 0) / techReviews.length;
+
+      await prisma.technology.update({
+        where: { id_tech: review.id_tech },
+        data: { rating: avgRating }
+      });
+    } else {
+      await prisma.technology.update({
+        where: { id_tech: review.id_tech },
+        data: { rating: 0 }
+      });
+    }
 
     res.status(200).json({
       success: true,
-      message: "Review berhasil dihapus",
-      data: deletedReview
+      message: "Review berhasil dihapus"
     });
   } catch (error) {
     console.error("deleteReview error:", error);

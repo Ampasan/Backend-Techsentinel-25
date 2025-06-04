@@ -1,5 +1,6 @@
 const express = require("express");
 const authorization = require("../middleware/auth.middleware");
+const { uploadSingleImage } = require('../middleware/uploadImage');
 
 const {
     searchTechnologies,
@@ -12,12 +13,24 @@ const {
 
 const router = express.Router();
 
+// Public routes - no auth needed
 router.get("/technology/search", searchTechnologies);
+router.get("/technologies", getAllTechnologies);
+router.get("/technology/:id", getTechnologyById);
 
-router.get("/technologies", authorization(["admin"]), getAllTechnologies);
-router.get("/technology/:id", authorization(["admin"]), getTechnologyById);
-router.post("/technology/new", authorization(["admin"]), createTechnology);
-router.put("/technology/:id", authorization(["admin"]), updateTechnology);
+// Admin routes
+router.post(
+    "/technology/new",
+    authorization(["admin"]),
+    uploadSingleImage("tech_image"),
+    createTechnology
+);
+router.patch(
+    "/technology/:id",
+    authorization(["admin"]),
+    uploadSingleImage("tech_image"),
+    updateTechnology
+);
 router.delete("/technology/:id", authorization(["admin"]), deleteTechnology);
 
 module.exports = router;

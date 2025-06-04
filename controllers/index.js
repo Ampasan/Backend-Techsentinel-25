@@ -36,8 +36,6 @@ const {
 const {
   getAllCategories,
   getCategoryById,
-  getAllCategoriesWithTechnologies,
-  getCategoryByIdWithTechnologies,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -48,6 +46,14 @@ const {
   getFavorites,
   removeFromFavorites,
 } = require("./favorite.controllers");
+
+const {
+  getAllSpecs,
+  getSpecById,
+  createSpec,
+  updateSpec,
+  deleteSpec,
+} = require("./spec.controllers");
 
 const { registerUser, login, logout } = require("./auth.controllers");
 
@@ -86,8 +92,6 @@ module.exports = {
   // Category controllers
   getAllCategories,
   getCategoryById,
-  getAllCategoriesWithTechnologies,
-  getCategoryByIdWithTechnologies,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -96,6 +100,13 @@ module.exports = {
   addToFavorites,
   getFavorites,
   removeFromFavorites,
+
+  // Spec controllers
+  getAllSpecs,
+  getSpecById,
+  createSpec,
+  updateSpec,
+  deleteSpec,
 
   // Auth controllers
   registerUser,

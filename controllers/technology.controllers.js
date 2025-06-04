@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const uploadToCloudinary = require("../utils/upload-to-cloudinary.js");
 
 const prisma = new PrismaClient();
 
@@ -7,39 +8,50 @@ async function searchTechnologies(req, res) {
   try {
     const { query } = req.query;
 
+    // Query pencarian nama tetap wajib
     if (!query) {
       throw new Error("Query pencarian harus diisi");
     }
 
     const technologies = await prisma.technology.findMany({
       where: {
-        AND: [
-          { deleted_at: null },
-          {
-            OR: [
-              { tech_name: { contains: query, mode: "insensitive" } }
-            ]
-          }
-        ]
+        deleted_at: null,
+        tech_name: { contains: query, mode: "insensitive" }
       },
       select: {
         id_tech: true,
         tech_name: true,
-        created_at: true,
+        brand: true,
+        rating: true,
+        tech_image: true,
         category: {
           select: {
-            id_category: true,
-            category_name: true,
-            description: true
+            category_name: true
+          }
+        },
+        specs: {
+          select: {
+            price: true
           }
         }
       }
     });
 
+    // Mapping hasil pencarian
+    const result = technologies.map(tech => ({
+      id_tech: tech.id_tech,
+      tech_name: tech.tech_name,
+      brand: tech.brand,
+      rating: tech.rating,
+      tech_image: tech.tech_image,
+      category: tech.category.category_name,
+      price: tech.specs[0]?.price || null
+    }));
+
     res.status(200).json({
       success: true,
       message: "Hasil pencarian teknologi berhasil diambil",
-      data: technologies
+      data: result
     });
   } catch (error) {
     console.error("searchTechnologies error:", error);
@@ -53,22 +65,36 @@ async function searchTechnologies(req, res) {
 // Get all technologies (admin only)
 async function getAllTechnologies(req, res) {
   try {
-    // Check if user is admin
-    if (req.user.level.name !== "admin") {
-      throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
-    }
-
     const technologies = await prisma.technology.findMany({
       where: { deleted_at: null },
       select: {
         id_tech: true,
         tech_name: true,
+        brand: true,
+        rating: true,
+        tech_image: true,
+        review: true,
+        description_tech: true,
         created_at: true,
+        updated_at: true,
         category: {
           select: {
             id_category: true,
-            category_name: true,
-            description: true
+            category_name: true
+          }
+        },
+        specs: {
+          select: {
+            ram: true,
+            storage: true,
+            baterai: true,
+            camera: true,
+            prosesor: true,
+            sistem_operasi: true,
+            ukuran_layar: true,
+            resolusi_layar: true,
+            refresh_rate: true,
+            price: true
           }
         }
       }
@@ -91,11 +117,6 @@ async function getAllTechnologies(req, res) {
 // Get technology by ID (admin only)
 async function getTechnologyById(req, res) {
   try {
-    // Check if user is admin
-    if (req.user.level.name !== "admin") {
-      throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
-    }
-
     const { id } = req.params;
 
     const technology = await prisma.technology.findUnique({
@@ -103,12 +124,49 @@ async function getTechnologyById(req, res) {
       select: {
         id_tech: true,
         tech_name: true,
+        brand: true,
+        rating: true,
+        tech_image: true,
+        review: true,
+        description_tech: true,
         created_at: true,
+        updated_at: true,
         category: {
           select: {
             id_category: true,
-            category_name: true,
-            description: true
+            category_name: true
+          }
+        },
+        specs: {
+          select: {
+            ram: true,
+            storage: true,
+            baterai: true,
+            camera: true,
+            prosesor: true,
+            sistem_operasi: true,
+            ukuran_layar: true,
+            resolusi_layar: true,
+            refresh_rate: true,
+            price: true
+          }
+        },
+        reviews: {
+          where: {
+            deleted_at: null
+          },
+          select: {
+            id_review: true,
+            rating: true,
+            comment: true,
+            created_at: true,
+            user: {
+              select: {
+                id_user: true,
+                user_name: true,
+                profile_picture: true
+              }
+            }
           }
         }
       }
@@ -140,26 +198,52 @@ async function createTechnology(req, res) {
       throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
     }
 
-    const { tech_name, id_category } = req.body;
+    const { 
+      tech_name, 
+      id_category, 
+      brand,
+      review,
+      description_tech,
+      rating
+    } = req.body;
 
-    if (!tech_name || !id_category) {
-      throw new Error("Semua field harus diisi");
+    if (!tech_name || !id_category || !brand || !review || !description_tech || !rating) {
+      throw new Error("Semua field wajib harus diisi");
+    }
+
+    let tech_image = null;
+    if (req.file && req.file.buffer) {
+      tech_image = await uploadToCloudinary(
+        req.file.buffer,
+        "tech_image",
+        req.file.originalname
+      );
     }
 
     const newTechnology = await prisma.technology.create({
       data: {
         tech_name,
-        id_category
+        id_category,
+        brand,
+        review,
+        description_tech,
+        tech_image,
+        rating: parseFloat(rating),
+        id_user: req.user.id_user
       },
       select: {
         id_tech: true,
         tech_name: true,
+        brand: true,
+        rating: true,
+        tech_image: true,
+        review: true,
+        description_tech: true,
         created_at: true,
         category: {
           select: {
             id_category: true,
-            category_name: true,
-            description: true
+            category_name: true
           }
         }
       }
@@ -188,7 +272,14 @@ async function updateTechnology(req, res) {
     }
 
     const { id } = req.params;
-    const { tech_name, id_category } = req.body;
+    const { 
+      tech_name, 
+      id_category, 
+      brand,
+      review,
+      description_tech,
+      rating
+    } = req.body;
 
     // Check if technology exists
     const existingTechnology = await prisma.technology.findUnique({
@@ -204,6 +295,20 @@ async function updateTechnology(req, res) {
     // Only include fields that are provided in the request
     if (tech_name !== undefined) updateData.tech_name = tech_name;
     if (id_category !== undefined) updateData.id_category = id_category;
+    if (brand !== undefined) updateData.brand = brand;
+    if (review !== undefined) updateData.review = review;
+    if (description_tech !== undefined) updateData.description_tech = description_tech;
+    if (rating !== undefined) updateData.rating = parseFloat(rating);
+
+    // Handle image upload
+    if (req.file && req.file.buffer) {
+      const tech_image = await uploadToCloudinary(
+        req.file.buffer,
+        "tech_image",
+        req.file.originalname
+      );
+      updateData.tech_image = tech_image;
+    }
 
     // Check if there are any fields to update
     if (Object.keys(updateData).length === 0) {
@@ -218,13 +323,16 @@ async function updateTechnology(req, res) {
       select: {
         id_tech: true,
         tech_name: true,
-        created_at: true,
+        brand: true,
+        rating: true,
+        tech_image: true,
+        review: true,
+        description_tech: true,
         updated_at: true,
         category: {
           select: {
             id_category: true,
-            category_name: true,
-            description: true
+            category_name: true
           }
         }
       }
@@ -260,13 +368,11 @@ async function deleteTechnology(req, res) {
       select: {
         id_tech: true,
         tech_name: true,
-        created_at: true,
         deleted_at: true,
         category: {
           select: {
             id_category: true,
-            category_name: true,
-            description: true
+            category_name: true
           }
         }
       }

@@ -14,7 +14,8 @@ async function getAllCategories(req, res) {
         id_category: true,
         category_name: true,
         icon_category: true,
-        description: true
+        created_at: true,
+        updated_at: true
       }
     });
 
@@ -46,7 +47,8 @@ async function getCategoryById(req, res) {
         id_category: true,
         category_name: true,
         icon_category: true,
-        description: true
+        created_at: true,
+        updated_at: true
       }
     });
 
@@ -68,44 +70,6 @@ async function getCategoryById(req, res) {
   }
 }
 
-// Get all categories with technologies (admin only)
-async function getAllCategoriesWithTechnologies(req, res) {
-  try {
-    // Check if user is admin
-    if (req.user.level.name !== "admin") {
-      throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
-    }
-
-    const categories = await prisma.category.findMany({
-      select: {
-        id_category: true,
-        category_name: true,
-        icon_category: true,
-        description: true,
-        technologies: {
-          where: { deleted_at: null },
-          select: {
-            id_tech: true,
-            tech_name: true
-          }
-        }
-      }
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "Daftar kategori berhasil diambil",
-      data: categories
-    });
-  } catch (error) {
-    console.error("getAllCategoriesWithTechnologies error:", error);
-    res.status(400).json({
-      success: false,
-      message: error.message || "Gagal mengambil daftar kategori"
-    });
-  }
-}
-
 // Create new category (admin only)
 async function createCategory(req, res) {
   try {
@@ -114,32 +78,32 @@ async function createCategory(req, res) {
       throw new Error("Unauthorized: Hanya admin yang dapat mengakses");
     }
 
-    const { category_name, description } = req.body;
+    const { category_name } = req.body;
 
-    if (!category_name || !description) {
-      throw new Error("Semua field harus diisi");
+    if (!category_name) {
+      throw new Error("Nama kategori harus diisi");
     }
 
-    let icon_category = null;
-    if (req.file && req.file.buffer) {
-      icon_category = await uploadToCloudinary(
-        req.file.buffer,
-        "icon_category",
-        req.file.originalname
-      );
+    if (!req.file || !req.file.buffer) {
+      throw new Error("Icon kategori harus diupload");
     }
+
+    // Upload icon to Cloudinary
+    const icon_category = await uploadToCloudinary(
+      req.file.buffer,
+      "icon_category",
+      req.file.originalname
+    );
 
     const newCategory = await prisma.category.create({
       data: {
         category_name,
-        icon_category,
-        description
+        icon_category
       },
       select: {
         id_category: true,
         category_name: true,
         icon_category: true,
-        description: true,
         created_at: true
       }
     });
@@ -167,7 +131,7 @@ async function updateCategory(req, res) {
     }
 
     const { id } = req.params;
-    const { category_name, description } = req.body;
+    const { category_name } = req.body;
 
     // Check if category exists
     const existingCategory = await prisma.category.findUnique({
@@ -178,28 +142,24 @@ async function updateCategory(req, res) {
       throw new Error("Kategori tidak ditemukan");
     }
 
-    let updateData = {};
-    
-    // Only include fields that are provided in the request
-    if (category_name !== undefined) updateData.category_name = category_name;
-    if (description !== undefined) updateData.description = description;
+    if (!category_name) {
+      throw new Error("Nama kategori harus diisi");
+    }
 
-    let icon_category = existingCategory.icon_category;
+    const updateData = {
+      category_name,
+      updated_at: new Date()
+    };
+
+    // Handle icon upload if new file is provided
     if (req.file && req.file.buffer) {
-      icon_category = await uploadToCloudinary(
+      const icon_category = await uploadToCloudinary(
         req.file.buffer,
-        "icon_category",
+        "category_icon",
         req.file.originalname
       );
       updateData.icon_category = icon_category;
     }
-
-    // Check if there are any fields to update
-    if (Object.keys(updateData).length === 0) {
-      throw new Error("Tidak ada data yang diupdate");
-    }
-
-    updateData.updated_at = new Date();
 
     const updatedCategory = await prisma.category.update({
       where: { id_category: id },
@@ -208,7 +168,6 @@ async function updateCategory(req, res) {
         id_category: true,
         category_name: true,
         icon_category: true,
-        description: true,
         updated_at: true
       }
     });
@@ -255,7 +214,7 @@ async function deleteCategory(req, res) {
       select: {
         id_category: true,
         category_name: true,
-        description: true,
+        icon_category: true,
         deleted_at: true
       }
     });
@@ -277,7 +236,6 @@ async function deleteCategory(req, res) {
 module.exports = {
   getAllCategories,
   getCategoryById,
-  getAllCategoriesWithTechnologies,
   createCategory,
   updateCategory,
   deleteCategory
