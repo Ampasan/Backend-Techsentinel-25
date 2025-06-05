@@ -73,6 +73,7 @@ async function getAllArticles(req, res) {
       select: {
         id_article: true,
         title_article: true,
+        slug: true,
         article_image: true,
         excerpt: true,
         created_at: true,
@@ -97,6 +98,7 @@ async function getAllArticles(req, res) {
     const result = articles.map(article => ({
       id: article.id_article,
       title: article.title_article,
+      slug: article.slug,
       thumbnail: article.article_image,
       author: article.user.user_name,
       category: article.technology.category.category_name,
@@ -127,6 +129,7 @@ async function getArticleById(req, res) {
       where: { id_article: id },
       select: {
         id_article: true,
+        slug: true,
         title_article: true,
         article_image: true,
         intro: true,
@@ -165,6 +168,7 @@ async function getArticleById(req, res) {
     // Format response to match the example
     const result = {
       id: article.id_article,
+      slug: article.slug,
       title: article.title_article,
       image: article.article_image,
       intro: article.intro,
@@ -201,6 +205,7 @@ async function createArticle(req, res) {
 
     const { 
       title_article,
+      slug,
       id_tech,
       excerpt,
       intro,
@@ -212,7 +217,7 @@ async function createArticle(req, res) {
       section2Content
     } = req.body;
 
-    if (!title_article || !id_tech || !excerpt || !intro) {
+    if (!title_article || !slug || !id_tech || !excerpt || !intro) {
       throw new Error("Field wajib harus diisi");
     }
 
@@ -247,6 +252,7 @@ async function createArticle(req, res) {
     const newArticle = await prisma.article.create({
       data: {
         title_article,
+        slug,
         id_tech,
         id_user: req.user.id_user,
         article_image,
@@ -264,6 +270,7 @@ async function createArticle(req, res) {
       select: {
         id_article: true,
         title_article: true,
+        slug: true,
         article_image: true,
         excerpt: true,
         intro: true,
@@ -310,6 +317,7 @@ async function updateArticle(req, res) {
     const { id } = req.params;
     const { 
       title_article,
+      slug,
       id_tech,
       excerpt,
       intro,
@@ -332,6 +340,7 @@ async function updateArticle(req, res) {
     let updateData = {};
     
     if (title_article !== undefined) updateData.title_article = title_article;
+    if (slug !== undefined) updateData.slug = slug;
     if (id_tech !== undefined) updateData.id_tech = id_tech;
     if (excerpt !== undefined) updateData.excerpt = excerpt;
     if (intro !== undefined) updateData.intro = intro;
@@ -378,6 +387,7 @@ async function updateArticle(req, res) {
       select: {
         id_article: true,
         title_article: true,
+        slug: true,
         article_image: true,
         excerpt: true,
         intro: true,

@@ -62,7 +62,7 @@ async function searchTechnologies(req, res) {
   }
 }
 
-// Get all technologies (admin only)
+// Get all technologies
 async function getAllTechnologies(req, res) {
   try {
     const technologies = await prisma.technology.findMany({
@@ -114,7 +114,7 @@ async function getAllTechnologies(req, res) {
   }
 }
 
-// Get technology by ID (admin only)
+// Get technology by ID
 async function getTechnologyById(req, res) {
   try {
     const { id } = req.params;

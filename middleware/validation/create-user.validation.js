@@ -41,7 +41,7 @@ function validateCreateUser(req, res, next) {
   const { error } = userSchema.validate(data);
 
   if (error) {
-    if (req.file) {
+    if (req.file && req.file.path) {
       let uploadedFilePath = path.join(
         __dirname,
         "..",

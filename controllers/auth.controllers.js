@@ -30,7 +30,7 @@ async function registerUser(req, res) {
     const hashedPassword = await bcrypt.hash(user_password, saltRounds);
 
     // Set default user level to A101 (user)
-    const defaultUserLevel = "A202";
+    const defaultUserLevel = "A101";
 
     // Upload gambar ke Cloudinary (opsional)
     let imageUrl = null;

@@ -45,16 +45,16 @@ async function compareTechnologies(req, res) {
 
     // Get all unique keys from both technologies' specs
     const allKeys = new Set([
-      ...Object.keys(tech1Data.specs),
-      ...Object.keys(tech2Data.specs)
+      ...Object.keys(tech1Data.specs[0] || {}),
+      ...Object.keys(tech2Data.specs[0] || {})
     ]);
 
     // Create comparison entries for each spec
     for (const key of allKeys) {
       comparison.push({
         key_spec: key,
-        tech1_value: tech1Data.specs[key] || "-",
-        tech2_value: tech2Data.specs[key] || "-"
+        tech1_value: tech1Data.specs[0]?.[key] || "-",
+        tech2_value: tech2Data.specs[0]?.[key] || "-"
       });
     }
 
@@ -104,6 +104,7 @@ async function getAllComparisons(req, res) {
           select: {
             id_tech: true,
             tech_name: true,
+            tech_image: true,
             category: {
               select: {
                 id_category: true,
@@ -122,6 +123,7 @@ async function getAllComparisons(req, res) {
         select: {
           id_tech: true,
           tech_name: true,
+          tech_image: true,
           category: {
             select: {
               id_category: true,
@@ -163,6 +165,10 @@ async function getComparisonById(req, res) {
           select: {
             id_tech: true,
             tech_name: true,
+            brand: true,
+            tech_image: true,
+            rating: true,
+            specs: true,
             category: {
               select: {
                 id_category: true,
@@ -184,6 +190,10 @@ async function getComparisonById(req, res) {
       select: {
         id_tech: true,
         tech_name: true,
+        brand: true,
+        tech_image: true,
+        rating: true,
+        specs: true,
         category: {
           select: {
             id_category: true,
@@ -193,10 +203,54 @@ async function getComparisonById(req, res) {
       }
     });
 
+    if (!comparedTechnology) {
+      throw new Error("Teknologi pembanding tidak ditemukan");
+    }
+
+    // Create comparison array for specs
+    const comparisonSpecs = [];
+    const tech1Data = comparison.technology;
+    const tech2Data = comparedTechnology;
+
+    // Get all unique keys from both technologies' specs
+    const allKeys = new Set([
+      ...Object.keys(tech1Data.specs[0] || {}),
+      ...Object.keys(tech2Data.specs[0] || {})
+    ]);
+
+    // Create comparison entries for each spec
+    for (const key of allKeys) {
+      comparisonSpecs.push({
+        key_spec: key,
+        tech1_value: tech1Data.specs[0]?.[key] || "-",
+        tech2_value: tech2Data.specs[0]?.[key] || "-"
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: "Perbandingan berhasil diambil",
-      data: { ...comparison, compared_technology: comparedTechnology }
+      data: {
+        id_detail: comparison.id_detail,
+        created_at: comparison.created_at,
+        tech1: {
+          id_tech: tech1Data.id_tech,
+          tech_name: tech1Data.tech_name,
+          brand: tech1Data.brand,
+          tech_image: tech1Data.tech_image,
+          rating: tech1Data.rating,
+          category: tech1Data.category
+        },
+        tech2: {
+          id_tech: tech2Data.id_tech,
+          tech_name: tech2Data.tech_name,
+          brand: tech2Data.brand,
+          tech_image: tech2Data.tech_image,
+          rating: tech2Data.rating,
+          category: tech2Data.category
+        },
+        comparison: comparisonSpecs
+      }
     });
   } catch (error) {
     console.error("getComparisonById error:", error);

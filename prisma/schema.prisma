@@ -68,6 +68,7 @@ model article {
   id_tech       String
   id_user       String
   title_article  String
+  slug          String   
   article_image   String?
   excerpt         String
   intro         String
