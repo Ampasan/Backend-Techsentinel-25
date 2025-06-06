@@ -4,7 +4,7 @@ const cookieParser = require("cookie-parser");
 const cors = require("cors");
 require("dotenv").config();
 
-const allowedOrigins = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+const allowedOrigins = process.env.FRONTEND_ORIGIN
 
 const app = express();
 
